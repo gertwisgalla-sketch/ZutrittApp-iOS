@@ -3,6 +3,8 @@ name: Build iOS App
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -14,17 +16,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Select Xcode Version
-        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
-
       - name: Show Xcode Version
         run: xcodebuild -version
 
-      - name: Build Archive (Unsigned / Ad-Hoc)
+      - name: Find and Build Project
         run: |
-          cd ios
+          PROJ_PATH=$(find . -name "ZutrittApp.xcodeproj" | head -n 1)
+          if [ -z "$PROJ_PATH" ]; then
+            echo "FEHLER: ZutrittApp.xcodeproj nicht gefunden!"
+            echo "Verzeichnisinhalt:"
+            find . -maxdepth 3
+            exit 1
+          fi
+          echo "Gefundenes Projekt: $PROJ_PATH"
+          PROJ_DIR=$(dirname "$PROJ_PATH")
+          cd "$PROJ_DIR"
+          
           xcodebuild clean archive \
-            -project ZutrittApp.xcodeproj \
+            -project "ZutrittApp.xcodeproj" \
             -scheme ZutrittApp \
             -configuration Release \
             -archivePath build/ZutrittApp.xcarchive \
@@ -34,14 +43,20 @@ jobs:
 
       - name: Export Payload to IPA
         run: |
-          mkdir -p ios/build/Payload
-          cp -r ios/build/ZutrittApp.xcarchive/Products/Applications/ZutrittApp.app ios/build/Payload/
-          cd ios/build
+          ARCHIVE_PATH=$(find . -name "ZutrittApp.xcarchive" | head -n 1)
+          if [ -z "$ARCHIVE_PATH" ]; then
+            echo "FEHLER: ZutrittApp.xcarchive nicht gefunden!"
+            exit 1
+          fi
+          BUILD_DIR=$(dirname "$ARCHIVE_PATH")
+          mkdir -p "$BUILD_DIR/Payload"
+          cp -r "$ARCHIVE_PATH/Products/Applications/ZutrittApp.app" "$BUILD_DIR/Payload/"
+          cd "$BUILD_DIR"
           zip -r ZutrittApp-unsigned.ipa Payload
-          echo "IPA successfully created!"
+          echo "IPA erfolgreich erstellt!"
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ZutrittApp-iOS-12-plus
-          path: ios/build/ZutrittApp-unsigned.ipa
+          path: "**/ZutrittApp-unsigned.ipa"
