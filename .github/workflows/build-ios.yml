@@ -1,0 +1,47 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS Archive & IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
+
+      - name: Show Xcode Version
+        run: xcodebuild -version
+
+      - name: Build Archive (Unsigned / Ad-Hoc)
+        run: |
+          cd ios
+          xcodebuild clean archive \
+            -project ZutrittApp.xcodeproj \
+            -scheme ZutrittApp \
+            -configuration Release \
+            -archivePath build/ZutrittApp.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export Payload to IPA
+        run: |
+          mkdir -p ios/build/Payload
+          cp -r ios/build/ZutrittApp.xcarchive/Products/Applications/ZutrittApp.app ios/build/Payload/
+          cd ios/build
+          zip -r ZutrittApp-unsigned.ipa Payload
+          echo "IPA successfully created!"
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZutrittApp-iOS-12-plus
+          path: ios/build/ZutrittApp-unsigned.ipa
